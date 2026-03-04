@@ -49,6 +49,8 @@ Time failure
 Pump metrics
 <img width="1912" height="852" alt="main3" src="https://github.com/user-attachments/assets/90d35b3f-af07-4d3a-8343-4a988fb52eca" />
 
+Useful life
+<img width="1919" height="774" alt="main4" src="https://github.com/user-attachments/assets/27ebe212-c616-4904-b595-d8ca5942f2ef" />
 
 
 
