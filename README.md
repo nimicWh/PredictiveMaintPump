@@ -1,4 +1,4 @@
-# PredictiveMaintPump
+# Predictive Maint Pump (ML)
 # Industrial Pump Predictive Maintenance Demo
 
 **Predictive maintenance (PdM) for industrial pumps** using real-world sensor data. Combines industrial automation expertise with **ML and anomaly detection** to forecast failures, lead-time, and Remaining Useful Life (RUL).
