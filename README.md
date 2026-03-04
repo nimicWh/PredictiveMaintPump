@@ -5,7 +5,7 @@
 
 ---
 
-## 🚀 Features
+## Features
 
 - **Anomaly Detection**
   - **Isolation Forest (unsupervised)**: Detect early pump degradation
