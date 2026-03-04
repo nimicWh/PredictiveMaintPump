@@ -1,26 +1,45 @@
 import os
-import pandas as pd
+import logging
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import shap
 
 from sklearn.ensemble import IsolationForest, RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import (
+    confusion_matrix,
+    precision_score,
+    recall_score,
+    f1_score,
+    roc_auc_score,
+)
 
-# --------------------------
-# 1. Paths
-# --------------------------
+# ==========================================================
+# 1. Configuration
+# ==========================================================
+RANDOM_STATE = 42
+TEST_SIZE = 0.30
+MIN_GAP = 50
+PLC_WINDOW = 10
+ISO_CONTAMINATION = 0.01
+SHAP_WINDOW = 200
+
+logging.basicConfig(level=logging.INFO)
+
+# ==========================================================
+# 2. Load Dataset
+# ==========================================================
 current_dir = os.path.dirname(os.path.abspath(__file__))
 input_csv = os.path.join(current_dir, "dataset_ai4.csv")
-output_csv = os.path.join(current_dir, "results.csv")
+results_csv = os.path.join(current_dir, "results.csv")
+shap_csv = os.path.join(current_dir, "shap_values.csv")
 
-# --------------------------
-# 2. Load dataset
-# --------------------------
+logging.info("Loading dataset...")
 df = pd.read_csv(input_csv)
 
-# Drop unnecessary columns
 df = df.drop(columns=["UDI", "Product ID", "Type"])
 df.columns = [
     "AirTemp", "ProcessTemp", "RotSpeed",
@@ -32,115 +51,169 @@ features = ["AirTemp", "ProcessTemp", "RotSpeed", "Torque", "ToolWear"]
 X = df[features]
 y = df["MachineFailure"]
 
-# Standardize features
+# ==========================================================
+# 3. Train/Test Split
+# ==========================================================
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y,
+    test_size=TEST_SIZE,
+    stratify=y,
+    random_state=RANDOM_STATE
+)
+train_idx = X_train.index
+test_idx = X_test.index
+
+# ==========================================================
+# 4. Scaling
+# ==========================================================
 scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
 
-# --------------------------
-# 3. Isolation Forest (unsupervised)
-# --------------------------
-print("\nTraining Isolation Forest (unsupervised)...")
-X_train_iso = X_scaled[y == 0]  # train only on healthy data
-iso_model = IsolationForest(contamination=0.02, random_state=42)
-iso_model.fit(X_train_iso)
+# ==========================================================
+# 5. Isolation Forest
+# ==========================================================
+logging.info("Training Isolation Forest...")
+iso_model = IsolationForest(
+    contamination=ISO_CONTAMINATION,
+    random_state=RANDOM_STATE
+)
+iso_model.fit(X_train_scaled[y_train == 0])
+iso_pred_test = np.where(iso_model.predict(X_test_scaled) == -1, 1, 0)
+df["ISO_Prediction"] = 0
+df.loc[test_idx, "ISO_Prediction"] = iso_pred_test
 
-iso_pred = iso_model.predict(X_scaled)
-iso_pred = np.where(iso_pred == -1, 1, 0)  # -1 = anomaly -> 1
+# ==========================================================
+# 6. Random Forest
+# ==========================================================
+logging.info("Training Random Forest...")
+rf_model = RandomForestClassifier(
+    n_estimators=200,
+    class_weight="balanced",
+    random_state=RANDOM_STATE,
+    n_jobs=-1
+)
+rf_model.fit(X_train_scaled, y_train)
+rf_probs = rf_model.predict_proba(X_test_scaled)[:, 1]
+rf_pred = (rf_probs >= 0.5).astype(int)
+df["RF_Prediction"] = 0
+df.loc[test_idx, "RF_Prediction"] = rf_pred
 
-# --------------------------
-# 4. Random Forest (supervised)
-# --------------------------
-print("Training Random Forest (supervised)...")
-rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
-rf_model.fit(X_scaled, y)
-rf_pred = rf_model.predict(X_scaled)
-
-# --------------------------
-# 5. Evaluate Models
-# --------------------------
-def evaluate_model(name, y_true, y_pred):
+# ==========================================================
+# 7. Evaluation Function
+# ==========================================================
+def evaluate_model(name, y_true, y_pred, probs=None):
     cm = confusion_matrix(y_true, y_pred)
     precision = precision_score(y_true, y_pred)
     recall = recall_score(y_true, y_pred)
     f1 = f1_score(y_true, y_pred)
     print(f"\n{name} Results")
     print("Confusion Matrix:\n", cm)
-    print(f"Precision: {precision:.3f}, Recall: {recall:.3f}, F1 Score: {f1:.3f}")
-    return cm, precision, recall
+    print(f"Precision: {precision:.3f}")
+    print(f"Recall:    {recall:.3f}")
+    print(f"F1 Score:  {f1:.3f}")
+    if probs is not None:
+        print(f"ROC-AUC:   {roc_auc_score(y_true, probs):.3f}")
+    return cm
 
-cm_iso, precision_iso, recall_iso = evaluate_model("Isolation Forest", y, iso_pred)
-cm_rf, precision_rf, recall_rf = evaluate_model("Random Forest", y, rf_pred)
+cm_rf = evaluate_model("Random Forest", y_test, rf_pred, rf_probs)
 
-# Plot RF confusion matrix
-plt.figure(figsize=(8,4))
-sns.heatmap(cm_rf, annot=True, fmt='d', cmap='Blues')
-plt.title("Random Forest Confusion Matrix")
+# ==========================================================
+# 8. Threshold Optimization
+# ==========================================================
+thresholds = np.linspace(0.01, 0.99, 200)
+f1_scores = [f1_score(y_test, (rf_probs >= t).astype(int)) for t in thresholds]
+best_threshold = thresholds[np.argmax(f1_scores)]
+print(f"\nOptimal Threshold: {best_threshold:.3f}")
+
+rf_pred_opt = (rf_probs >= best_threshold).astype(int)
+evaluate_model("Random Forest (Optimized)", y_test, rf_pred_opt, rf_probs)
+df.loc[test_idx, "RF_Prediction_Opt"] = rf_pred_opt
+
+plt.figure(figsize=(6,4))
+plt.plot(thresholds, f1_scores)
+plt.axvline(best_threshold, color='r', linestyle='--')
+plt.title("F1 Score vs Threshold")
+plt.xlabel("Threshold")
+plt.ylabel("F1 Score")
+plt.tight_layout()
 plt.show()
 
-# --------------------------
-# 6. Lead-Time Before Failure
-# --------------------------
-print("\nCalculating Lead-Time Before Failure...")
-lead_times = []
+# ==========================================================
+# 9. SHAP Explainability
+# ==========================================================
+logging.info("Calculating SHAP values (raw log-odds)...")
+X_test_df = pd.DataFrame(X_test_scaled, columns=features)
+explainer = shap.TreeExplainer(rf_model, model_output="raw")
+shap_values = explainer.shap_values(X_test_df)
 
-failure_indices = df.index[df["MachineFailure"] == 1]
-
-for idx in failure_indices:
-    prior_anomalies = df.loc[:idx-1].index[iso_pred[:idx] == 1]
-    if len(prior_anomalies) > 0:
-        lead_time = idx - prior_anomalies[-1]
-        lead_times.append(lead_time)
-
-if lead_times:
-    avg_lead = np.mean(lead_times)
-    print(f"Average Lead-Time Before Failure (samples): {avg_lead:.2f}")
+# Convert to 2D for binary class 1
+if isinstance(shap_values, list):
+    shap_values_class1 = shap_values[1]
 else:
-    print("No early anomalies detected before failures.")
+    shap_values_class1 = shap_values[:, :, 1]
 
-# --------------------------
-# 7. MTBF Calculation
-# --------------------------
-min_gap = 50  # minimum gap to separate distinct failure events
-events = []
-prev = -min_gap*2
-for idx in failure_indices:
-    if idx - prev > min_gap:
-        events.append(idx)
-    prev = idx
+shap_df = pd.DataFrame(shap_values_class1, columns=features)
+shap_df["Index"] = test_idx.values
+shap_df = shap_df.sort_values("Index")
 
-if len(events) > 1:
-    intervals = [events[i+1] - events[i] for i in range(len(events)-1)]
-    mtbf = np.mean(intervals)
-    print(f"Mean Time Between Failures (MTBF): {mtbf:.2f} samples")
-else:
-    mtbf = None
-    print("Not enough failures to calculate MTBF.")
+# ==========================================================
+# 10. Rolling SHAP Trends
+# ==========================================================
+rolling_shap = shap_df[features].abs().rolling(SHAP_WINDOW).mean()
+plt.figure(figsize=(10,6))
+for col in features:
+    plt.plot(rolling_shap[col], label=col)
+plt.title(f"Rolling Mean |SHAP| Over Time (window={SHAP_WINDOW})")
+plt.legend()
+plt.tight_layout()
+plt.show()
 
-# --------------------------
-# 8. RUL Estimation
-# --------------------------
-rul = []
-for i in df.index:
-    future_failures = [f for f in failure_indices if f >= i]
-    if future_failures:
-        rul.append(future_failures[0] - i)
-    else:
-        rul.append(None)
+# ==========================================================
+# 11. Save SHAP Values for Dashboard
+# ==========================================================
+shap_df.to_csv(shap_csv, index=False)
+logging.info(f"SHAP values saved to {shap_csv}")
 
+# ==========================================================
+# 12. Data Drift Detection (PSI)
+# ==========================================================
+def calculate_psi(expected, actual, bins=10):
+    expected_counts, bin_edges = np.histogram(expected, bins=bins)
+    actual_counts, _ = np.histogram(actual, bins=bin_edges)
+    expected_perc = expected_counts / len(expected)
+    actual_perc = actual_counts / len(actual)
+    psi = np.sum((expected_perc - actual_perc) * np.log((expected_perc + 1e-6)/(actual_perc + 1e-6)))
+    return psi
+
+print("\nPSI Drift Results:")
+for i, col in enumerate(features):
+    psi = calculate_psi(X_train_scaled[:, i], X_test_scaled[:, i])
+    print(f"{col}: {psi:.4f}")
+
+# ==========================================================
+# 13. RUL Calculation
+# ==========================================================
+rul = np.full(len(df), np.nan)
+next_failure = None
+for i in reversed(range(len(df))):
+    if df.loc[i, "MachineFailure"] == 1:
+        next_failure = i
+    if next_failure is not None:
+        rul[i] = next_failure - i
 df["RUL"] = rul
 
-# --------------------------
-# 9. PLC Alarm Simulation
-# --------------------------
-plc_alarm = 1 if np.any(iso_pred == 1) else 0
+# ==========================================================
+# 14. PLC Alarm Simulation
+# ==========================================================
+recent_anomalies = df["ISO_Prediction"].iloc[-PLC_WINDOW:]
+plc_alarm = 1 if np.any(recent_anomalies == 1) else 0
 status = "⚠ WARNING" if plc_alarm else "HEALTHY"
 print(f"\nPLC Alarm Bit: {plc_alarm} ({status})")
 
-# --------------------------
-# 10. Save Results
-# --------------------------
-df["ISO_Prediction"] = iso_pred
-df["RF_Prediction"] = rf_pred
-df.to_csv(output_csv, index=False)
-
-print(f"Results saved to {output_csv}")
+# ==========================================================
+# 15. Save Results
+# ==========================================================
+df.to_csv(results_csv, index=False)
+logging.info(f"Results saved to {results_csv}")
+logging.info("Pipeline execution completed successfully.")
