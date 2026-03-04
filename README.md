@@ -28,7 +28,7 @@
 
 ## Project Structure
 
-pump-pdm-demo/
+PredictiveMaintPump/
 
 1) pmpump_main.py # Train models, evaluate, calculate lead-time, MTBF, RUL
 2) pump_dashboard.py # Interactive Streamlit dashboard
