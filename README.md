@@ -56,8 +56,8 @@ Useful life
 1. Clone the repo:
 
 ```bash
-git clone https://github.com/yourusername/pump-pdm-demo.git
-cd pump-pdm-demo
+git clone https://github.com/nimicWh/PredictiveMaintPump.git
+cd PredictiveMaintPump
 ```
 
 2. Install dependencies:
