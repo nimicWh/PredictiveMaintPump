@@ -9,12 +9,14 @@ import plotly.graph_objects as go
 # --------------------------
 current_dir = os.path.dirname(os.path.abspath(__file__))
 results_csv = os.path.join(current_dir, "results.csv")
+shap_csv = os.path.join(current_dir, "shap_values.csv")  # SHAP log-odds values saved from main pipeline
 
-if not os.path.exists(results_csv):
-    st.error("❌ Please run main.py first to generate results.csv")
+if not os.path.exists(results_csv) or not os.path.exists(shap_csv):
+    st.error("❌ Please run main.py first to generate results.csv and shap_values.csv")
     st.stop()
 
 df = pd.read_csv(results_csv)
+shap_df_full = pd.read_csv(shap_csv)  # columns: features + "Index"
 
 st.title("Industrial Pump Predictive Maintenance Dashboard")
 
@@ -22,14 +24,14 @@ st.title("Industrial Pump Predictive Maintenance Dashboard")
 # 2. Sidebar Controls
 # --------------------------
 st.sidebar.header("Display Settings")
-window = st.sidebar.slider("Aggregation Window (samples)", min_value=1, max_value=500, value=50, step=10)
-start_idx = st.sidebar.number_input("Zoom Start Index", min_value=0, max_value=len(df)-1, value=0, step=1)
-end_idx = st.sidebar.number_input("Zoom End Index", min_value=0, max_value=len(df), value=len(df), step=1)
+window = st.sidebar.slider("Aggregation Window (samples)", 1, 500, 50, 10)
+start_idx = st.sidebar.number_input("Zoom Start Index", 0, len(df)-1, 0, 1)
+end_idx = st.sidebar.number_input("Zoom End Index", 0, len(df), len(df), 1)
 
 model_choice = st.sidebar.radio("Select Model to Display", ["Isolation Forest", "Random Forest"])
 pred_column = "ISO_Prediction" if model_choice == "Isolation Forest" else "RF_Prediction"
 
-critical_threshold = st.sidebar.number_input("Critical Lead-Time Threshold (samples)", min_value=1, max_value=500, value=20)
+critical_threshold = st.sidebar.number_input("Critical Lead-Time Threshold (samples)", 1, 500, 20)
 
 if end_idx <= start_idx:
     st.sidebar.error("End Index must be greater than Start Index")
@@ -38,7 +40,7 @@ if end_idx <= start_idx:
 # --------------------------
 # 3. PLC Alarm Status
 # --------------------------
-plc_alarm = df["ISO_Prediction"].sum() > 0
+plc_alarm = df["ISO_Prediction"].iloc[start_idx:end_idx].sum() > 0
 if plc_alarm:
     st.error("⚠ Warning: Potential Pump Degradation Detected (PLC Alarm Bit = 1)")
 else:
@@ -152,7 +154,36 @@ fig2.update_layout(
 st.plotly_chart(fig2)
 
 # --------------------------
-# 8. Metrics Summary
+# 8. Rolling SHAP Trends
+# --------------------------
+st.subheader("Feature Importance Trends (Rolling |SHAP| log-odds)")
+
+# Filter shap_df for zoom window
+shap_zoom = shap_df_full[(shap_df_full["Index"] >= start_idx) & (shap_df_full["Index"] < end_idx)].copy()
+shap_features = [c for c in shap_zoom.columns if c != "Index"]
+
+# Compute rolling mean |SHAP|
+shap_rolling = shap_zoom[shap_features].abs().rolling(window).mean()
+shap_rolling["Index"] = shap_zoom["Index"].values
+
+fig3 = go.Figure()
+for f in shap_features:
+    fig3.add_trace(go.Scatter(
+        x=shap_rolling["Index"],
+        y=shap_rolling[f],
+        mode='lines',
+        name=f
+    ))
+fig3.update_layout(
+    xaxis_title="Sample Index",
+    yaxis_title="Rolling |SHAP| (log-odds)",
+    height=400,
+    title="Rolling Feature Contribution Trends"
+)
+st.plotly_chart(fig3)
+
+# --------------------------
+# 9. Metrics Summary
 # --------------------------
 st.subheader("Pump Metrics")
 
@@ -161,9 +192,10 @@ anomaly_count = df["ISO_Prediction"].sum()
 st.metric("Failure Rate", f"{failure_rate*100:.2f}%")
 st.metric("Total Anomalies Detected", anomaly_count)
 
-# ISO Precision & Recall
-precision_iso = (df['ISO_Prediction'] & df['MachineFailure']).sum() / df['ISO_Prediction'].sum() if df['ISO_Prediction'].sum() > 0 else 0
-recall_iso = (df['ISO_Prediction'] & df['MachineFailure']).sum() / df['MachineFailure'].sum() if df['MachineFailure'].sum() > 0 else 0
+precision_iso = ((df['ISO_Prediction'] & df['MachineFailure']).sum() /
+                 max(df['ISO_Prediction'].sum(),1))
+recall_iso = ((df['ISO_Prediction'] & df['MachineFailure']).sum() /
+              max(df['MachineFailure'].sum(),1))
 
 st.write(f"**Isolation Forest Precision:** {precision_iso:.3f}")
 st.write(f"**Isolation Forest Recall:** {recall_iso:.3f}")
@@ -185,12 +217,12 @@ else:
     st.write("MTBF: Not enough failures to calculate.")
 
 # --------------------------
-# 9. Info
+# 10. Info
 # --------------------------
 st.markdown("""
 - **Lead-Time Markers (green/orange):** first ISO anomaly before failure; orange = critical early warning.  
-- **Aggregation Window:** rolling max to reduce noise in binary signals.  
-- **Zoom:** inspect specific segments of pump data.  
+- **Rolling SHAP Trends:** feature importance over time (log-odds contributions).  
 - **RUL:** estimated Remaining Useful Life per sample.  
-- **PLC Alarm:** triggered if any ISO anomaly detected.
+- **PLC Alarm:** triggered if any ISO anomaly detected.  
+- **Zoom & Aggregation:** focus on specific segments and smooth anomaly signals.  
 """)
