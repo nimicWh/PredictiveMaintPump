@@ -12,7 +12,7 @@ from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_
 # 1. Paths
 # --------------------------
 current_dir = os.path.dirname(os.path.abspath(__file__))
-input_csv = os.path.join(current_dir, "ai4i2020.csv")
+input_csv = os.path.join(current_dir, "dataset_ai4.csv")
 output_csv = os.path.join(current_dir, "results.csv")
 
 # --------------------------
@@ -142,4 +142,5 @@ print(f"\nPLC Alarm Bit: {plc_alarm} ({status})")
 df["ISO_Prediction"] = iso_pred
 df["RF_Prediction"] = rf_pred
 df.to_csv(output_csv, index=False)
+
 print(f"Results saved to {output_csv}")
