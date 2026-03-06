@@ -153,10 +153,10 @@ plt.tight_layout()
 plt.show()
 
 # ==========================================================
-# 9. SHAP Explainability (Corrected)
+# 9. SHAP Explainability 
 # ==========================================================
 # ==========================================================
-# 9. SHAP Explainability (Corrected)
+# 9. SHAP Explainability 
 # ==========================================================
 logging.info("Calculating SHAP values...")
 
@@ -167,7 +167,7 @@ explainer = shap.TreeExplainer(rf_model, model_output="raw")
 shap_values = explainer.shap_values(X_test_df)
 
 # For binary classification, shap_values is a list: [class0, class1]
-# We usually take class 1 (positive) for RUL / failure explanation
+# class 1 (positive) for RUL / failure explanation
 if isinstance(shap_values, list) and len(shap_values) == 2:
     shap_values_class1 = shap_values[1]  # shape: (n_samples, n_features)
 else:
@@ -245,4 +245,5 @@ print(f"\nPLC Alarm Bit: {plc_alarm} ({status})")
 # ==========================================================
 df.to_csv(results_csv, index=False)
 logging.info(f"Results saved to {results_csv}")
+
 logging.info("Pipeline execution completed successfully.")
