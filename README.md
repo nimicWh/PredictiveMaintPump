@@ -3,6 +3,9 @@
 
 **Predictive maintenance (PdM) for industrial pumps** using real-world sensor data. Combines industrial automation with **ML and anomaly detection** to forecast failures, lead-time, and Remaining Useful Life (RUL).
 
+## Dataset Citation
+AI4I 2020 Predictive Maintenance Dataset. (2020). UCI Machine Learning Repository. [https://doi.org/10.24432/C5HS5C](https://doi.org/10.24432/C5HS5C)
+
 ---
 
 ## Features
