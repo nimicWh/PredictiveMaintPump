@@ -155,9 +155,7 @@ plt.show()
 # ==========================================================
 # 9. SHAP Explainability 
 # ==========================================================
-# ==========================================================
-# 9. SHAP Explainability 
-# ==========================================================
+
 logging.info("Calculating SHAP values...")
 
 X_test_df = pd.DataFrame(X_test_scaled, columns=features)
@@ -247,3 +245,4 @@ df.to_csv(results_csv, index=False)
 logging.info(f"Results saved to {results_csv}")
 
 logging.info("Pipeline execution completed successfully.")
+
