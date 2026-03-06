@@ -132,11 +132,8 @@ plt.tight_layout()
 plt.show()
 
 # ==========================================================
-# 8. SHAP Explainability (Optional for Random Forest)
+# 8. SHAP Explainability
 # ==========================================================
-# Note: SHAP does not apply directly to Isolation Forest as it does for tree-based models.
-# If you still want to use SHAP, you need to apply it to models like Random Forest or other tree-based classifiers.
-# This section can be skipped if only EIF is used for anomaly detection.
 
 # ==========================================================
 # 9. Data Drift Detection (PSI)
@@ -426,5 +423,6 @@ df.to_csv(results_csv, index=False)
 logging.info(f"Results saved to {results_csv}")
 
 logging.info("Pipeline execution completed successfully.")
+
 
 
