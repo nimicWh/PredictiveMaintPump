@@ -10,6 +10,8 @@
 - **Anomaly Detection**
   - **Isolation Forest (unsupervised)**: Detect early pump degradation
   - **Random Forest (supervised)**: Predict failures from labeled data
+  - **Random Cut Forest (unsupervised)**
+  - **Extended Isolation Forest (unsupervised)**
 
 - **Predictive Metrics**
   - Lead-Time Before Failure
