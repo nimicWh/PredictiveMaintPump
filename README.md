@@ -69,7 +69,7 @@ cd PredictiveMaintPump
 
 2. Install dependencies:
 
-   Use pip install <pandas, numpy, scikit-learn, matplotlib, seaborn, streamlit, plotly, shap>
+   Use pip install <pandas, numpy, scikit-learn, matplotlib, seaborn, streamlit, plotly, shap, PyOD>
 
 ## Usage
 1. Run main.py to generate predictions:
