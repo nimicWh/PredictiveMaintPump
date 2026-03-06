@@ -139,13 +139,12 @@ cm_rcf = evaluate_model("Random Cut Forest", y_test, rcf_pred_test)
 # ==========================================================
 # 8. Threshold Optimization for RRCF (if needed)
 # ==========================================================
-# Not needed, as threshold has already been calculated based on ISO_CONTAMINATION
+# NA
 
 # ==========================================================
 # 9. SHAP Explainability (Not Applicable to RRCF)
 # ==========================================================
-logging.info("SHAP is not applicable to Random Cut Forest. Skipping SHAP explainability.")
-
+# NA
 # ==========================================================
 # 10. Data Drift Detection (PSI)
 # ==========================================================
@@ -187,4 +186,5 @@ print(f"\nPLC Alarm Bit: {plc_alarm} ({status})")
 # ==========================================================
 df.to_csv(results_csv, index=False)
 logging.info(f"Results saved to {results_csv}")
+
 logging.info("Pipeline execution completed successfully.")
