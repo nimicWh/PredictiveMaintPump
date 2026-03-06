@@ -107,4 +107,5 @@ cd PredictiveMaintPump
 - Always run pmpump_main.py before pump_dashboard.py
 - Dashboard is fully local.
 - Critical early warnings highlighted in orange
+- Dashboard now only on Random Forest and Isolation Forest.
 
